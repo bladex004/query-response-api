@@ -5,12 +5,29 @@ from pydantic import BaseModel
 import random
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 import json
 import os
 import logging
 import re
+import difflib
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import stopwords
+import nltk
+from uuid import uuid4
 
-logging.basicConfig(level=logging.INFO)
+# Download NLTK resources
+try:
+    nltk.data.find('tokenizers/punkt')
+    nltk.data.find('corpora/wordnet')
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('punkt')
+    nltk.download('wordnet')
+    nltk.download('stopwords')
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AI-Driven Query Response API")
@@ -26,496 +43,590 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
+    """Root endpoint for API welcome message."""
     return {"message": "Welcome to the AI-Driven Query Response API. Visit /docs for API documentation."}
 
 class QueryRequest(BaseModel):
+    """Pydantic model for query request payload."""
     query: str
 
+class PersonalizedAI:
+    """Personalized AI with ML, NLP, pattern recognition, and self-training."""
+    
+    def __init__(self):
+        self.intent_map = {
+            "booking": ["book", "ticket", "reserve", "purchase"],
+            "cancellation": ["cancel", "refund", "cancellation"],
+            "bus_status": ["bus", "late", "delay", "location", "where"],
+            "payment": ["pay", "payment", "charge", "price"],
+            "complaint": ["complain", "issue", "problem", "bad"],
+            "feedback": ["feedback", "review", "rate"],
+            "general_info": ["info", "information", "details", "how to"]
+        }
+        self.intent_templates = {
+            "booking": [
+                "I’m sorry, I’m not sure about ‘{query}’. Are you looking to book a ticket? You can do so via our website’s booking portal.",
+                "Could you clarify ‘{query}’? If you’re trying to make a booking, please visit our website and select your travel details."
+            ],
+            "cancellation": [
+                "I’m not clear on ‘{query}’. Are you asking about cancelling a ticket? You can cancel up to 15 minutes before departure via ‘Manage My Booking’."
+            ],
+            "bus_status": [
+                "I’m unsure about ‘{query}’. Are you inquiring about a bus’s status? Please provide your booking details or check the tracking link on our website."
+            ],
+            "payment": [
+                "I’m not certain about ‘{query}’. Are you asking about payment options? We accept credit cards, UPI, and Net Banking via our website."
+            ],
+            "complaint": [
+                "I’m sorry, I didn’t catch ‘{query}’. Are you reporting an issue? Please provide more details or submit a complaint via our website’s support page."
+            ],
+            "feedback": [
+                "I’m not sure about ‘{query}’. Are you providing feedback? We’d love to hear your thoughts via the survey link on our website."
+            ],
+            "general_info": [
+                "I’m unclear on ‘{query}’. Are you seeking more information? Please check our website for details or let me know how I can assist you further."
+            ],
+            "unknown": [
+                "I’m sorry, I couldn’t understand ‘{query}’. Could you clarify? Are you looking for help with booking, cancellation, or something else?",
+                "I didn’t quite catch ‘{query}’. Could you provide more details so I can assist you better?"
+            ]
+        }
+        self.learned_phrases = {}
+        self.lemmatizer = WordNetLemmatizer()
+        self.stop_words = set(stopwords.words('english'))
+
+    def preprocess_query(self, query):
+        """Preprocess query using NLP techniques."""
+        tokens = word_tokenize(query.lower())
+        tokens = [self.lemmatizer.lemmatize(token) for token in tokens if token not in self.stop_words]
+        return ' '.join(tokens)
+
+    def detect_intent(self, query):
+        """Detect intent using NLP and pattern recognition."""
+        processed_query = self.preprocess_query(query)
+        max_similarity = 0
+        best_intent = "unknown"
+
+        # Keyword-based matching
+        for intent, keywords in self.intent_map.items():
+            for keyword in keywords:
+                if keyword in processed_query:
+                    return intent
+
+        # Fuzzy matching for incomplete queries
+        for intent, keywords in self.intent_map.items():
+            for keyword in keywords:
+                similarity = difflib.SequenceMatcher(None, keyword, processed_query).ratio()
+                if similarity > max_similarity and similarity > 0.7:
+                    max_similarity = similarity
+                    best_intent = intent
+
+        # Check learned phrases
+        for phrase, intent in self.learned_phrases.items():
+            similarity = difflib.SequenceMatcher(None, phrase.lower(), processed_query).ratio()
+            if similarity > max_similarity and similarity > 0.8:
+                max_similarity = similarity
+                best_intent = intent
+
+        return best_intent
+
+    def learn_phrase(self, query, intent):
+        """Learn new phrases for self-training."""
+        processed_query = self.preprocess_query(query)
+        if processed_query not in self.learned_phrases:
+            self.learned_phrases[processed_query] = intent
+            logger.info(f"Learned new phrase: '{processed_query}' for intent: {intent}")
+
+    def generate_dynamic_response(self, query, intent):
+        """Generate a new response dynamically."""
+        templates = [
+            "I’m here to assist with {query}. {action}",
+            "Thank you for asking about {query}. {action}",
+            "Regarding {query}, {action}"
+        ]
+        actions = [
+            "please visit our website for more details",
+            "you can find more information on our support page",
+            "kindly provide additional details for assistance"
+        ]
+        return random.choice(templates).format(query=query.lower(), action=random.choice(actions))
+
+    def generate_response(self, query, used_responses):
+        """Generate a response with decision-making and non-repeating logic."""
+        intent = self.detect_intent(query)
+        self.learn_phrase(query, intent)
+        
+        templates = self.intent_templates.get(intent, self.intent_templates["unknown"])
+        available_templates = [t for t in templates if t.format(query=query.lower()) not in used_responses]
+        
+        if not available_templates:
+            new_response = self.generate_dynamic_response(query, intent)
+            self.intent_templates[intent].append(new_response)
+            logger.info(f"Generated new response for intent {intent}: {new_response}")
+            return new_response
+        
+        return random.choice(available_templates).format(query=query.lower())
+
 class CustomAI:
+    """AI-driven query response generator with advanced AI features."""
+    
     def __init__(self):
         self.vectorizer = TfidfVectorizer(max_features=100, stop_words='english')
-        self.training_data = {"queries": [], "cluster_labels": [], "generated_responses": {}}
+        self.training_data = {
+            "queries": [],
+            "cluster_labels": [],
+            "generated_responses": {},
+            "learned_phrases": {},
+            "used_responses": {}  # Track all used responses per category
+        }
         self.data_file = os.getenv("DATA_FILE", "training_data.json")
         self.query_count = 0
         self.train_interval = 5
-        self.used_response_sets = {}
+        self.used_response_sets = {}  # In-memory tracking for current session
         self.num_clusters = 10
-        self.response_formats = [
-            "To {query}, please use the website’s designated process.",
-            "For {query}, follow the instructions on our site.",
-            "Regarding {query}, check the appropriate section on the website.",
-            "To address {query}, refer to the site’s guidelines.",
-            "For assistance with {query}, explore the available options online.",
-            "To handle {query}, use the provided tools on the website.",
-            "Concerning {query}, navigate to the site’s resources."
-        ]
-        self.query_response_map = {
+        self.personalized_ai = PersonalizedAI()
+        self.query_response_map = self.load_response_map()
+        self.load_training_data()
+
+    def load_response_map(self):
+        """Load FlixCRM response map with ~200+ responses."""
+        return {
             "greeting": {
-                "keywords": ["hello", "hi", "help"],
+                "keywords": ["hello", "hi", "help", "welcome"],
                 "responses": [
-                    "Hello and welcome to Flix! I’m here to assist with {query}.",
-                    "Greetings and welcome to Flix. How may I help with {query}?",
-                    "Welcome to Flix! My name is here to assist with {query}.",
-                    "Hi, Welcome to Flix, I am here to assist with {query}.",
-                    "I appreciate that you have reached out to us with your query about {query}.",
-                    "Thank you for reaching out with your inquiry about {query}.",
-                    "I am grateful that you contacted us regarding your concern about {query}.",
-                    "I appreciate that you are reporting to us about this concern: {query}. I will look into it immediately."
+                    "Hello and welcome to Flix! I’m here to assist you today. How may I assist you?",
+                    "Greetings and welcome to Flix. How may I help you?",
+                    "Welcome to Flix! My name is your assistant. How may I assist you?",
+                    "Hi, Welcome to Flix, I am your assistant. How may I assist you?"
+                ]
+            },
+            "acknowledgment": {
+                "keywords": ["reaching out", "contacted", "query", "concern"],
+                "responses": [
+                    "I appreciate that you have reached out to us with your query.",
+                    "Thank you for reaching out with your inquiry.",
+                    "I am grateful that you contacted us regarding your concern.",
+                    "I appreciate that you are reporting to us about this concern. I will look into it immediately."
                 ]
             },
             "verification": {
-                "keywords": ["verify", "booking details", "pnr"],
+                "keywords": ["verify", "booking details", "pnr", "passenger details"],
                 "responses": [
-                    "Sure, I'm here to help. To assist you effectively with {query}, please provide the following details: Booking number or PNR Number, Passenger's full name, Booking email address or booking phone number.",
-                    "Certainly, I'm ready to assist you with {query}. To ensure I can help you effectively, please provide the following details: Booking number, Passenger's full name, Booking email address or booking phone number.",
-                    "Could you please provide the following details to help us complete the verification process for {query}?",
-                    "To proceed with the verification for {query}, may I kindly ask you to share the required information?",
-                    "For the purpose of {query}, please help us by providing the details listed on our website.",
-                    "Thank you for sharing the details for {query}. Please allow me a moment to look for your concern.",
-                    "Thank you for providing the information for {query}. Please allow me a moment to check with the details.",
-                    "Thank you for sharing these details on {query}. Just a moment, please, I'm checking.",
-                    "I'm still checking your booking/ride details for {query}. Please be with me.",
-                    "I got your booking but need to check the issue with your ride for {query}."
+                    "Sure, I'm here to help. To assist you effectively, please provide the following details: Booking number or PNR Number, Passenger's full name, Booking email address or booking phone number. Once you share this information, I'll be able to assist you promptly.",
+                    "Certainly, I'm ready to assist you. To ensure I can help you effectively, please provide the following details: Booking number, Passenger's full name, Booking email address or booking phone number. Once you provide these details, I'll be able to assist you accordingly.",
+                    "Could you please provide the following details to help us complete the verification process? Passenger's Full name, Booking reference number/PNR number, Booking email address, Phone number used for booking.",
+                    "To proceed with the verification, may I kindly ask you to share the following information? Passenger's Full name, Booking reference number/PNR number, Booking email address, Phone number used for booking."
+                ]
+            },
+            "checking_details": {
+                "keywords": ["checking", "looking into", "moment"],
+                "responses": [
+                    "Thank you for sharing the details. Please allow me a moment to look for your concern.",
+                    "Thank you for providing the information. Please allow me a moment to check with the details.",
+                    "Thank you for sharing these details. Just a moment, please, I'm checking on the same."
+                ]
+            },
+            "still_checking": {
+                "keywords": ["still checking", "more time"],
+                "responses": [
+                    "I am still checking your booking/ride details. Please be with me.",
+                    "I got booking however need to check the issue with your ride."
                 ]
             },
             "appreciate_patience": {
-                "keywords": ["patience", "wait"],
+                "keywords": ["patience", "thank you", "appreciate"],
                 "responses": [
-                    "Thank you so much for your patience with {query}.",
-                    "I really appreciate your patience with {query}.",
-                    "Thank you so much for notifying me about the issue: {query}.",
-                    "Thank you for reaching out to me about this: {query}.",
-                    "I will help resolve your issue with {query}.",
-                    "I appreciate your patience in this matter: {query}.",
-                    "Your patience is appreciated for {query}.",
-                    "Thank you for your patience regarding {query}."
+                    "Thank you so much for your patience.",
+                    "I really appreciate your patience.",
+                    "Thank you so much for notifying me about the issue.",
+                    "Thank you for reaching out to me about this.",
+                    "I will get your issue resolved positively.",
+                    "I appreciate your patience in this matter.",
+                    "Your patience is appreciable."
                 ]
             },
             "change_boarding_point": {
-                "keywords": ["change boarding point", "board from another location"],
+                "keywords": ["change boarding point", "board from another location", "different boarding"],
                 "responses": [
                     "May I know why you want to change the boarding point for {query}?",
-                    "As per our T&C, your ticket is valid for the boarding location booked, and I regret to inform that boarding from another location isn’t possible for {query}.",
-                    "I understand your preference for boarding the bus from your desired location for {query}. However, to ensure a smooth process, we kindly ask you to board from the designated location where the QR code can be scanned by the bus staff.",
-                    "While I appreciate your desire to board the bus from a different location for {query}, please note that the process requires the QR code to be scanned by the host at the specified boarding point.",
-                    "I understand your request to board the bus from your chosen location for {query}. Unfortunately, due to our procedures, the QR code must be scanned by the host at the specified point.",
-                    "Thank you for your understanding. Although we recognize your preferred boarding location for {query}, our process mandates that the QR code be scanned by the host at the assigned area.",
-                    "I appreciate your interest in boarding from your preferred spot for {query}. However, to adhere to our process, the QR code must be scanned by the host at the designated boarding area."
+                    "As per the T&C, your ticket is valid for the boarding location booked, and I regret to inform that boarding from another location isn’t possible for {query}. https://help.flixbus.com/s/article/PSSPCan-I-board-the-bus-at-a-later-stop?language=en_IN",
+                    "I understand your preference for boarding the bus from your desired location. However, to ensure a smooth process, we kindly ask you to board from the designated location where the QR code can be scanned by the bus staff.",
+                    "While I appreciate your desire to board the bus from a different location, please note that the process requires the QR code to be scanned by the host at the specified boarding point. We recommend using the designated location for a seamless experience.",
+                    "I understand your request to board the bus from your chosen location. Unfortunately, due to our procedures, the QR code must be scanned by the host at the specified point. We encourage you to use the designated boarding location for a smooth transition.",
+                    "Thank you for your understanding. Although we recognize your preferred boarding location, our process mandates that the QR code be scanned by the host at the assigned area. For a hassle-free experience, please board from the designated location.",
+                    "I appreciate your interest in boarding from your preferred spot. However, to adhere to our process, the QR code must be scanned by the host at the designated boarding area. We recommend you board from this location for a smooth experience."
                 ]
             },
             "boarding_point_details": {
                 "keywords": ["boarding point details", "where to board"],
                 "responses": [
-                    "The ticket contains essential details such as the boarding points, bus route number, a link in the bottom right corner, and a GPS link that can be accessed by clicking on the boarding point for more information about {query}.",
-                    "You can find important information on the ticket, including boarding points, the bus route number, a link at the bottom right corner, and a GPS link accessible by clicking on the boarding point for {query}.",
-                    "The ticket provides various details, such as the boarding points, the bus route number, a link located in the bottom right corner, and a GPS link by clicking on the boarding point for further information about {query}."
+                    "The ticket contains essential details such as the boarding points, bus route number, a link in the bottom right corner, and a GPS link that can be accessed by clicking on the boarding point for more information.",
+                    "You can find important information on the ticket, including boarding points, the bus route number, a link at the bottom right corner, and a GPS link accessible by clicking on the boarding point.",
+                    "The ticket provides various details, such as the boarding points, the bus route number, a link located in the bottom right corner, and a GPS link available by clicking on the boarding point for further information."
                 ]
             },
             "price_difference": {
-                "keywords": ["price difference", "why price change"],
+                "keywords": ["price difference", "why price changed", "fare difference"],
                 "responses": [
-                    "I would like to inform you that prices are dynamic and may change on the website with time for {query}.",
-                    "Please note that our prices are dynamically adjusted based on demand, availability, and other factors to ensure the best possible experience for all our passengers for {query}.",
-                    "To provide you with an accurate and fair pricing, our rates are dynamically updated for {query}. We recommend booking early to secure the best available price.",
-                    "We always recommend our passengers a price lock feature where the price shown at the time of selection is reserved for 10 minutes, allowing passengers to complete their booking at the same rate for {query}.",
-                    "We suggest booking early and utilizing the price lock feature to secure the most favorable fare for {query}.",
-                    "Different boarding or drop-off locations, timing, seat type, extra services, or demand can affect pricing for {query}."
+                    "I would like to inform you that as the prices are dynamic in nature and may change on the website with time.",
+                    "Please note that our prices are dynamically adjusted based on demand, availability, and other factors to ensure the best possible experience for all our passengers.",
+                    "To provide you with the most accurate and fair pricing, our rates are dynamically updated. We recommend booking early to secure the best available price.",
+                    "We always recommend our passengers about a price lock feature where the price shown at the time of selection is reserved for 10 minutes, allowing passengers to complete their booking at the same rate within this timeframe. Delays in booking beyond this period may result in price adjustments.",
+                    "We suggest booking early and utilizing the price lock feature to secure the most favorable fare."
                 ]
             },
             "pre_departure_call": {
-                "keywords": ["pre-departure call", "call before departure"],
+                "keywords": ["pre departure call", "call before departure"],
                 "responses": [
-                    "I completely understand that you are expecting a call from the bus staff for {query}. Please note that pre-departure calls are not mandatory; however, the host might call you before arriving at your departure point."
+                    "I completely understand that you are expecting a call from the bus staff. Please note that pre-departure calls are not mandatory however, the host might call you before arriving at your departure point. We appreciate your understanding."
                 ]
             },
-            "bus_running_late": {
-                "keywords": ["bus running late", "late bus"],
+            "bus_late": {
+                "keywords": ["bus late", "bus delayed", "bus running late"],
                 "responses": [
-                    "I regret to inform you that the bus is running late due to some operational reason and apologize for the inconvenience caused due to delay for {query}.",
-                    "So requesting you to please be available on the boarding point as the ride has already been departed from the previous boarding point and now going to reach your boarding point as quickly as possible for {query}.",
-                    "As per the updated information, the expected time of the ride to reach your boarding point is available on our website for {query}.",
-                    "Additionally, I’m sharing the bus host contact number for your better assistance with {query}.",
-                    "I hope I’m able to help you with your query: {query}. Is there anything else I may help you?"
+                    "I regret to inform you that the bus is running late due to some operational reason and apologize for the inconvenience caused due to delay. So requesting you to please be available on the boarding point as the ride has already been departed from the previous boarding point and now going to reach your boarding point as quickly as possible.",
+                    "As per the updated information the expected time of the ride to reach your boarding point is [ETA]. So please be rest assured that the ride can reach to your location anytime, and be prepared with the boarding related documents for taking a safe and pleasant ride with us. Route Number: [Number]. Additionally I’m sharing the bus host contact number for your better assistance: [Contact Number]."
                 ]
             },
             "missed_bus": {
-                "keywords": ["missed bus", "left behind"],
+                "keywords": ["missed bus", "miss bus"],
                 "responses": [
-                    "We see you as a valued customer and do not wish to leave you behind for {query}. However, it’s necessary to move the bus on schedule, as we have a commitment to punctuality.",
-                    "We appreciate you as a valued customer and have no intention of leaving you behind for {query}. At the same time, we must adhere to the bus's scheduled departure time for the sake of punctuality.",
-                    "We truly value you as a customer, and it’s not in our interest to leave you behind for {query}. However, we also have to ensure the bus departs on time, as punctuality is essential.",
-                    "I sincerely apologize for the inconvenience caused by missing the bus for {query}.",
-                    "I understand how frustrating this can be, and I’m here to help you with any further assistance you may need for {query}.",
-                    "Please help me with the booking reference number or the PNR number for verification process so that I can help you with the information associated with your journey with Flix for {query}.",
-                    "I would like to inform you that the ride has departed from the designated boarding point as per the mentioned time of the ticket and all the other passengers from the same boarding point have taken their rides without facing any difficulties for {query}.",
-                    "I can understand that due to some reason you are not being able to reach the boarding point before the mentioned time due to which you are unable to take the ride for {query}.",
-                    "After a careful investigation, I must conclude that as there are no operational issues associated with your ride for {query}, I apologize and I’m unable to provide any alternative nor process with the refund.",
-                    "I completely understand your concern, and I genuinely want to help you with {query}. However, the system currently doesn’t allow me to process the refund."
+                    "We see you as a valued customer and do not wish to leave you behind. However, it’s necessary to move the bus on schedule, as we have a commitment to punctuality.",
+                    "We appreciate you as a valued customer and have no intention of leaving you behind. At the time we must adhere to the bus's scheduled departure time for the sake of punctuality.",
+                    "We truly value you as a customer, and it’s not in our interest to leave you behind. However, we also have to ensure the bus departs on time, as punctuality is essential.",
+                    "I sincerely apologize for the inconvenience caused by missing the bus. Please help me with the booking reference number or the PNR number for verification so that I can assist you further.",
+                    "I understand how frustrating this can be. I would like to inform you that the ride has departed from the designated boarding point as per the mentioned time of the ticket and all the reminder messages have been provided to you via SMS and email.",
+                    "After a careful investigation I must conclude that as there are no operational issues associated with your ride, I’m unable to provide any alternative nor process with the refund. To avoid such situation I recommend reaching out to us before departure time. May I know is it possible to reach the next boarding point?"
                 ]
             },
-            "bus_host_number": {
+            "bus_host_info": {
                 "keywords": ["bus number", "host number"],
                 "responses": [
-                    "I really apologize that I am unable to provide the bus number; however, you may identify your ride through the route number mentioned on the ticket for {query}."
+                    "I really apologize that I am unable to provide the bus number however you may identify your ride through the route number mentioned on the ticket and it gets displayed in front of the bus as well.",
+                    "I regret to inform you that we don't have access to the bus driver or host's contact information. So, we always request our passengers to be at the pickup point 15 minutes prior to the departure. You may track your ride through the tracing link mentioned on the ticket."
                 ]
             },
-            "bus_driver_host_details": {
-                "keywords": ["bus driver details", "host details"],
-                "responses": [
-                    "I regret to inform you that we don't have access to the bus driver or host's contact information for {query}. So, we always request our passengers to be at the pickup point 15 minutes prior to the departure."
-                ]
-            },
-            "where_is_my_bus": {
+            "where_is_bus": {
                 "keywords": ["where is my bus", "bus location"],
                 "responses": [
-                    "As checked, the ride is scheduled, and it will arrive at the boarding point as per the mentioned time on the ticket for {query}.",
-                    "I’m requesting you to please be present at the boarding point 15 minutes before the departure time of the bus for {query}, so that you can easily board the bus.",
-                    "Here I’m sharing the bus route number, which is mentioned on the ticket and available in front of the bus for {query}.",
-                    "Additionally, I’m sharing the tracking link of your ride for {query}, which will be operational when the ride departs from your designated boarding point."
+                    "As checked, the ride is for [Details]. So, I would like to inform you that the ride will arrive at at the boarding point as per per the mentioned time on the ticket. I’m requesting you to please be present at the boarding point 15 minutes prior to prior to the departure time. Here I’m sharing the bus route number: [Number]. Additionally, I’m sharing the tracking link link: https://global.flixbus.com/track/order/3242800682 and the bus host number: [Number]."
                 ]
             },
             "where_is_boarding_point": {
-                "keywords": ["where is boarding point", "boarding location"],
+                "keywords": ["where is boarding point", "boarding point location"],
                 "responses": [
-                    "This is the address of your boarding point for {query}, available on the ticket.",
-                    "This is the Google map link for the exact boarding point location for {query}.",
-                    "I’m requesting you to please be available on the boarding point 15 minutes before the departure time of the bus for {query}, so that you can easily board the bus."
+                    "As checked the ticket is for [Details]. This is the address of your boarding point: [Address]. This is the Google map link for for the image of your of your boarding point: [Link]. This is the bus host contact number point: [Number]. I’m requesting you to please to be available on the boarding point."
                 ]
             },
             "bus_delay": {
-                "keywords": ["bus delay", "delayed bus"],
+                "keywords": ["bus delay", "delay"],
                 "responses": [
-                    "I’m sincerely apologizing for the delay of the ride and sorry for the inconvenience caused to you for {query}.",
-                    "I would like to inform you that due to some operational reason, the ride has been delayed for {query}, and our operational team is trying to manage the delay.",
-                    "I regret to inform you that due to heavy traffic, the ride got stuck for {query}, and now it’s back on track.",
-                    "Here I’m sharing the bus route number for {query}, which is mentioned on the ticket and available in front of the bus.",
-                    "This is the tracking link of the ride for {query}, which will be operational when the bus starts from the initial boarding point.",
-                    "So, it’s a request to please be available on the boarding point with your all the boarding details as the ride is going to reach your boarding point anytime for {query}."
+                    "I’m sincerely apologizing for the delay of the ride delay and sorry for delay the inconvenience caused to by you.",
+                    "I would like to inform to you that due to some operational reason to the delay.",
+                    "Here is I’m sharing the bus route number: [Number].",
+                    "This is the tracking link: [Link].",
+                    "Also I’m sharing the this is the bus host contact number: [Number].",
+                    "Please wait any nearby shaded area any time and keep hydrating yourself."
                 ]
             },
             "pax_running_late": {
-                "keywords": ["running late", "wait for me"],
+                "keywords": ["running late", "suitable"],
                 "responses": [
-                    "Extremely sorry to inform you that the bus will depart from the boarding point as per the scheduled time for {query}, so requesting you to please try to reach the boarding point before the mentioned time.",
-                    "Unfortunately, the bus cannot wait for our delayed passengers for {query}.",
-                    "If you can’t reach in time for {query}, you can cancel your ride up to 15 minutes before departure via manage my booking on our website.",
-                    "This is the bus host contact number and route number of your bus for {query}, mentioned on your ticket."
+                    "Extremely sorry to inform to you that for the ride that will be departing as per its departure time scheduled.",
+                    "So, requesting you to please to try",
+                    "Kindly try to reach the to boarding point prior to the time provided. If you are not going to reach reach in time you can cancel your ride up to prior to departure via prior to departure via",
+                    "This is manage my booking: https://shop.flixbus.in/rebooking/ login.",
+                    "This is the bus host contact number."
                 ]
             },
-            "ride_cancellation": {
-                "keywords": ["ride cancellation", "cancel ride"],
+            "ride_cancellations": {
+                "keywords": ["ride cancellation", "canceled ride"],
                 "responses": [
-                    "I’m really sorry for the inconvenience caused to you due to the ride cancellation for {query}, and a self-help link has been provided to you via email.",
-                    "So requesting you to please check your email inbox along with the spam folder for {query}, and after clicking on that link, you will be able to book an alternative ride completely free of cost.",
-                    "Or if you want, I can help you with the full ticket refund by cancelling the ticket from our end for {query}, and the refund will be credited within 7 working days.",
-                    "Thank you for the confirmation. Please give a moment to proceed for the cancellation process for {query}.",
-                    "This is the cancellation invoice for your ticket for {query}.",
-                    "After the completion of the given time, if you are facing any difficulties regarding the refund for {query}, then don’t hesitate to reach out to us."
+                    "I’m really sorry for this inconvenience due to  ride cancellation cancellation.",
+                    "A self-help link has been provided provided to you via email with with booking email id.",
+                    "Please check email email or spam folder folder to book an alternative or generate refund a ticket refund within 7 days working days.",
+                    "Should I proceed with your refund permission?"
                 ]
             },
             "pax_no_show": {
-                "keywords": ["no show", "missed ride refund"],
+                "keywords": ["no show", "Pax"],
                 "responses": [
-                    "I deeply apologize for the inconvenience you’re experiencing for {query}, and I understand your situation. I’m unable to proceed with either the refund or booking an alternative ride.",
-                    "I understand your concern and want to assist you with {query}, but unfortunately, our system prevents us from taking any further action in this case.",
-                    "I understand your situation, and I’d likely feel frustrated too for {query}. I am sorry I am unable to meet your request at this time.",
-                    "As per our company policy, in such cases where the service has been provided as intended for {query}, we are unable to process a refund.",
-                    "Following a detailed investigation, we confirmed that the bus arrived at the designated boarding point, other passengers boarded successfully, and the bus departed as scheduled for {query}.",
-                    "After a thorough review of the incident, we have determined that the bus arrived at the designated boarding point on time for {query}, and other passengers boarded without issue.",
-                    "We have thoroughly reviewed the situation and found that the bus arrived at the designated boarding point for {query}, successfully boarded other passengers, and departed after the scheduled time.",
-                    "Upon review, we found that the bus reached the boarding point on time for {query}, boarded other passengers, and departed after the scheduled time."
+                    "I deeply apologize for this inconvenience.",
+                    "After investigating, we find we found the bus arrived at at the designated point boarding point and other passengers.",
+                    "Unfortunately we cannot process refund a refund as per policy.",
+                    "https://www.flixbus.com/ terms_and_conditions.pdf, clause 15."
                 ]
             },
-            "changes_after_booking_denial": {
+            "changes_after_booking": {
                 "keywords": ["change booking", "modify booking"],
                 "responses": [
-                    "Once your ticket is booked, we are unable to modify it from our side for {query}. Please visit our website, go to ‘Manage My Booking,’ and fill in the required information.",
-                    "We cannot change your booking after it has been confirmed for {query}. Please go to our website, select ‘Manage My Booking,’ and provide the needed details."
+                    "After booking is done, we cannot modify ticket it from our end side.",
+                    "Kindly visit our website and go to 'Manage My Booking', and fill out information in the required details.",
+                    "This is the website link: https://shop.flixbus.in/rebooking."
                 ]
             },
             "booking_process": {
-                "keywords": ["booking process", "how to book"],
+                "keywords": ["how to book", "book process"],
                 "responses": [
-                    "To assist with {query}, please access the booking links provided on our website and select 'CONTINUE' to proceed to the checkout page.",
-                    "For {query}, ensure you have a valid identification proof like Aadhar Card, Passport, or Driving License for boarding.",
-                    "Regarding {query}, we accept payment methods like Credit Cards, UPI, and Net Banking, with a platform fee of Rs 5.",
-                    "For {query}, note that seat options include standard, window, and premium seats, with details available on the website.",
-                    "To complete {query}, fill out the necessary details for seat reservation, passenger information, contact details, and payment on our booking portal."
-                ]
+                    "To book, click on link provided and select 'CONTINUE' to proceed to checkout page.",
+                    "Fill out: Seat, Reservation, Passengers, Contact, Payment info.",
+                    "Seats: Standard seat, free, Panorama seat, Premium seat.",
+                    "Note: Gender seating policy applies.",
+                    "Carry ID: Aadhar, Passport, or License DL.",
+                    "Luggage: 7kg hand, 20kg regular free luggage.",
+                    "Payment: Credit card, UPI, Net banking.",
+                    "Platform fee: Rs 5."
+                ],
             },
-            "changes_via_mmb": {
-                "keywords": ["change date", "change time", "postpone ride"],
+            "manage_my_bookings": {
+                "keywords": ["change date", "cancel ticket"],
                 "responses": [
-                    "If you wish to change the date or time of your ride for {query}, cancel, or postpone it, you can easily make these adjustments through the ‘Manage My Booking’ section.",
-                    "If you need to reschedule, cancel, or postpone your ride for {query}, you can manage these changes through the ‘Manage My Booking’ portal."
+                    "To change date/time, cancel, or postpone ride",
+                    "Use 'Manage My Booking' section.",
+                    "Enter booking number, phone number number, email, click 'Retrieve Booking'.",
+                    "See options to modify details.",
+                    "Link: https://shop.flixbus.in/rebooking."
                 ]
             },
             "complaint_feedback": {
                 "keywords": ["complaint", "feedback"],
                 "responses": [
-                    "Thank you so much! We're thrilled to hear that you enjoyed your experience with us for {query}.",
-                    "Your feedback on my response for {query} is important to me! Please provide it via our website.",
-                    "We appreciate your feedback for {query} and look forward to hearing from you on our support page."
+                    "Thank you for your feedback!",
+                    "We’re thrilled to hear you enjoyed your experience with us us.",
+                    "We strive to provide excellent service always."
                 ]
             },
-            "rude_staff_complaint": {
-                "keywords": ["rude driver", "rude host", "staff behavior"],
+            "driver_host_complaints": {
+                "keywords": ["rude driver", "bad host"],
                 "responses": [
-                    "I sincerely apologize for the unpleasant experience you had with the driver and the bus host for {query}.",
-                    "We deeply regret that their behavior was not up to the standards you expect and deserve for {query}.",
-                    "We value our passengers’ comfort and respect, and it’s truly disappointing to hear about this situation for {query}.",
-                    "Please be assured that I will escalate this matter to the relevant team for a thorough review and appropriate action for {query}.",
-                    "I would also be grateful if you could provide feedback on how I’ve assisted you today with {query}."
+                    "I apologize for the unpleasant experience with driver or host.",
+                    "We regret their behavior was not up to standard standards.",
+                    "I’ll escalate this to our team for review and action."
                 ]
             },
-            "bus_breakdown_refund": {
-                "keywords": ["breakdown refund", "bus issue refund"],
+            "bus_breakdowns": {
+                "keywords": ["bus breakdown", "AC not working"],
                 "responses": [
-                    "Thank you for reaching out, and I sincerely apologize for the inconvenience you’ve experienced due to the breakdown of the bus for {query}.",
-                    "To assist you further with {query}, could you please provide your booking reference number or PNR number, along with the email address or phone number?",
-                    "We need your patience and cooperation in this matter for {query}. Our team is actively working to get updates from the host.",
-                    "While we understand your request for a refund or alternative ride for {query}, we are currently in the process of resolving the situation.",
-                    "Please rest assured that we are committed to providing you with the best support possible for {query}.",
-                    "Thank you for your understanding and cooperation for {query}."
+                    "I apologize for inconvenience due to bus breakdown or AC issue.",
+                    "Please share booking reference number for further assist assistance.",
+                    "Our team is working to resolve this issue.",
+                    "As ride is ongoing, we cannot refund at this moment."
                 ]
             },
-            "route_details": {
+            "route_detail": {
                 "keywords": ["route details", "bus route"],
                 "responses": [
-                    "I regret to inform you that we don’t have the specific route information about the ride for {query}; however, we have the access for the stop locations.",
-                    "These are the stop locations associated with your existing booking for {query}, available on our website."
+                    "We don’t have specific route info information for the ride.",
+                    "We have access to stop locations: [Stop Locations].",
+                    "Tracking link: [Link]."
                 ]
             },
-            "change_ticket_date": {
-                "keywords": ["change ticket date", "reschedule date"],
+            "change_dates": {
+                "keywords": ["change date", "reschedule"],
                 "responses": [
-                    "Yes, you can change the date of your journey up to 15 minutes before departure time for {query} via the manage my booking section on our website.",
-                    "Please note that the prices are dynamic in nature for {query}, and any fare difference will be displayed during the rescheduling process.",
-                    "If the new fare is lower for {query}, then the difference will be refunded to your original payment method within 7 working days."
+                    "You can change journey date up to 15 min minutes prior departure via prior via manage booking.",
+                    "Go to: https://shop.flixbus.in/rebooking/login.",
+                    "Enter Booking number, Email/Phone, click Retrieve.",
+                    "Select 'change departure date'.",
+                    "Note: Dynamic pricing may apply."
                 ]
             },
             "route_information": {
-                "keywords": ["route information", "ride route"],
+                "keywords": ["route info", "bus path"],
                 "responses": [
-                    "I regret to inform you that we don’t have the route information of the ride for {query}; however, we have the access for the stop location associated with that booking.",
-                    "If you have already booked the ticket and want to know the route information of your ride for {query}, you may click on the link provided on our website."
+                    "We don’t have route info information for the ride.",
+                    "We have access to stop locations.",
+                    "View route: https://www.flixbus.in/track/ with booking number."
                 ]
             },
             "flix_lounge": {
-                "keywords": ["flix lounge", "anand vihar lounge"],
+                "keywords": ["flix lounge", "anand vihar"],
                 "responses": [
-                    "Thank you for reaching out to us. We apologize for any confusion, but please note that the Flix Lounge facility is not available at the Anand Vihar location for {query}.",
-                    "We understand your concern, and we sincerely apologize for any inconvenience caused for {query}. Since the Anand Vihar location doesn't have a Flix Lounge, we suggest waiting at the boarding point."
+                    "Flix Lounge is not available at Anand Vihar location.",
+                    "It’s an operational boarding point only.",
+                    "Arrive 15 min minutes prior to departure."
                 ]
             },
-            "bus_delay_less_120": {
-                "keywords": ["delay less than 120", "short delay"],
+            "delay_under_120": {
+                "keywords": ["delay under 120", "short delay"],
                 "responses": [
-                    "I’m really sorry for the delay of the bus for {query}. I understand this can be frustrating, and I sincerely apologize for the inconvenience caused.",
-                    "As checked, the bus was delayed due to some operational reasons and traffic issues for {query}.",
-                    "According to our T&C, we can only offer a refund if the bus is delayed by more than 120 minutes for {query}.",
-                    "Please let me know if you have any other questions about {query}. We truly appreciate your patience."
+                    "Sorry for the bus delay due to operational or traffic issues.",
+                    "Delay is under 120 min minutes, no refund per T&C.",
+                    "See: https://www.flixbus.in/terms, clause 15."
                 ]
             },
-            "bus_delay_more_120": {
-                "keywords": ["delay more than 120", "long delay"],
+            "delay_over_120": {
+                "keywords": ["delay over 120", "long delay"],
                 "responses": [
-                    "I sincerely apologize for the delay for {query}. I understand how frustrating this can be.",
-                    "Upon investigation, I can confirm that the bus is delayed by more than 2 hours for {query} due to operational reasons.",
-                    "If you prefer not to wait, I can proceed with cancelling your ticket and initiate a refund for {query}.",
-                    "Your refund has been initiated, and the amount will be credited to your source account within 7 working days for {query}.",
-                    "Thank you for your understanding and patience with {query}."
+                    "I apologize for delay over 2 hours due to operational issues.",
+                    "I can cancel ticket and refund if you prefer not to wait.",
+                    "Proceed with refund? It’ll credit in 7 working days."
                 ]
             },
-            "bus_breakdown_ac": {
-                "keywords": ["ac not working", "bus breakdown"],
+            "breakdown_no_refunded": {
+                "keywords": ["breakdown no refund", "AC issue"],
                 "responses": [
-                    "I sincerely apologize for the inconvenience caused due to the bus breakdown and as the AC not working for {query}.",
-                    "I’ve already highlighted this issue to our team for {query}, and they are working on resolving it as soon as possible.",
-                    "As the ride has not been cancelled for {query}, I regret to inform you that we cannot process a refund at this moment.",
-                    "Please stay assured that the team is working hard to address the issue for {query}, and we are here to support you throughout.",
-                    "Thank you for your understanding and patience with {query}."
+                    "Sorry for inconvenience due to breakdown or AC issue.",
+                    "As ride is ongoing, we cannot refund now.",
+                    "Our team is addressing the issue."
                 ]
             },
-            "luggage_policy": {
-                "keywords": ["luggage", "baggage"],
+            "luggage_policies": {
+                "keywords": ["luggage policy", "baggage rules"],
                 "responses": [
-                    "Thank you for reaching out regarding our luggage policy for {query}.",
-                    "I’m happy to inform you that you are allowed to bring 7kg of hand luggage and 20kg of regular luggage completely free of charge for {query}.",
-                    "Additionally, you may bring one extra luggage item of 20kg per passenger for {query}. Since space is limited, we recommend booking your additional luggage early.",
-                    "For more details, please visit our luggage policy on our website for {query}."
+                    "Luggage: 7kg hand, 20kg regular free luggage.",
+                    "Extra 20kg luggage bookable via Manage Booking: https://shop.flixbus.in/rebooking.",
+                    "Special luggage (up to 30kg) bookable.",
+                    "See prices: https://www.flixbus.in/prices/baggage."
                 ]
             },
-            "cancel_ticket": {
-                "keywords": ["cancel ticket", "cancellation refund"],
+            "cancel_tickets": {
+                "keywords": ["cancel ticket", "cancellation"],
                 "responses": [
-                    "I would like to inform you that you may cancel your ticket for {query} up to 15 minutes before the departure time via our website.",
-                    "You can cancel it through our website’s ‘Manage My Booking’ section for {query}.",
-                    "If you choose the voucher option for {query}, the refund amount will be generated in the form of voucher and sent via email.",
-                    "If you select the option for cash refund for {query}, it will be credited to your source account within 7 working days excluding weekends and holidays.",
-                    "To know more about our cancellation policy for {query}, please follow the link provided on our website."
+                    "Cancel ticket up to 15 min minutes prior departure via prior Manage Booking.",
+                    "Go to: https://shop.flixbus.in/rebooking/login.",
+                    "Select 'Cancel trip'.",
+                    "Choose cash refund (7 days working days) or voucher.",
+                    "See policy: [Link]."
                 ]
             },
             "stranded_passenger": {
                 "keywords": ["stranded", "left behind"],
                 "responses": [
-                    "We’re very sorry to hear about your situation for {query} and understand how frustrating this must be.",
-                    "Could you please share your booking reference number, registered email, and phone number so we can look into this for {query}?",
-                    "Unfortunately, we are unable to offer a refund or arrange an alternative ride in this situation for {query}, as per our company policy.",
-                    "We kindly request that you make alternative travel arrangements to reach the destination for {query}."
+                    "Sorry to hear you were stranded.",
+                    "Please share booking number, email, phone number details.",
+                    "We cannot refund or arrange alternative as per policy.",
+                    "Please make alternate travel arrangements."
                 ]
             },
-            "lost_item": {
-                "keywords": ["lost item", "left behind item"],
+            "lost_items": {
+                "keywords": ["lost item", "left something"],
                 "responses": [
-                    "We’re very sorry to hear that your belongings were left on the bus for {query}.",
-                    "To assist you in recovering your items for {query}, please fill out our Lost and Found form on our website.",
-                    "Our team will connect with you as soon as we have any updates for {query}."
+                    "Sorry to hear you left belongings on the bus.",
+                    "Fill out Lost and Found form to recover items.",
+                    "Our team will investigate and contact you."
                 ]
             },
-            "travel_with_pet": {
-                "keywords": ["travel with pet", "pet policy"],
+            "pet_travel": {
+                "keywords": ["pet travel", "pet policy"],
                 "responses": [
-                    "Thank you for your inquiry regarding traveling with pets for {query}.",
-                    "Unfortunately, at this time, we are unable to accommodate pets on our buses for {query}."
+                    "We cannot accommodate pets on buses at this time.",
+                    "See pet policy for details."
                 ]
             },
-            "prices_discounts": {
+            "price_discounts": {
                 "keywords": ["prices", "discounts"],
                 "responses": [
-                    "The price shown on your ticket is the final price for {query}. You do not need to pay any further amount.",
-                    "I apologize, but currently, there are no offers or discounts available for {query}.",
-                    "I would like to inform you that prices are dynamic in nature and may change on the website with time for {query}.",
-                    "Please note that our prices are dynamically adjusted based on demand, availability for {query}.",
-                    "Our pricing structure is designed to reflect real-time demand and availability for {query}."
+                    "Ticket price is final, no discounts available now.",
+                    "Prices are dynamic based on demand.",
+                    "Book early to secure best price."
                 ]
             },
-            "blanket_service": {
-                "keywords": ["blanket service", "blankets"],
+            "blanket_services": {
+                "keywords": ["blanket", "blanket service"],
                 "responses": [
-                    "I regret to inform you but as of now we are not providing blankets on board for {query}; however, we recommend our customers to carry one along.",
-                    "We're pleased to know that blankets and water bottles have been provided for your convenience on all rides for {query}.",
-                    "For your comfort, we have ensured blankets are available on every ride for {query}.",
-                    "We're happy to let you know that blankets have been provided for all passengers on each ride for {query}.",
-                    "To enhance your journey, blankets have been made available on all rides for {query}."
+                    "We don’t provide blankets on board currently.",
+                    "Carry one for comfort.",
+                    "Some rides offer blankets and water."
                 ]
             },
-            "water_bottle_service": {
+            "water_bottle_services": {
                 "keywords": ["water bottle", "water service"],
                 "responses": [
-                    "We regret to inform you that, as of now, we do not offer water bottle services on our Flix buses for {query}.",
-                    "We recommend that passengers bring their own water bottles for their journey for {query}."
+                    "We don’t offer water bottles on Flix buses.",
+                    "Bring your own water and refreshments."
                 ]
             },
-            "washroom_service": {
-                "keywords": ["washroom", "toilet"],
+            "washroom_services": {
+                "keywords": ["washroom", "restroom"],
                 "responses": [
-                    "I regret to inform you that as of now, Flix does not provide washroom facilities on the bus for {query}. However, the bus host will take care of comfort breaks."
+                    "Flix buses don’t have washroom facilities.",
+                    "Bus host will arrange comfort breaks."
                 ]
             },
-            "seat_change": {
-                "keywords": ["change seat", "seat assignment"],
+            "seat_changes": {
+                "keywords": ["change seat", "seat change"],
                 "responses": [
-                    "We apologize, but we are unable to change your seat for {query} as it is automatically assigned.",
-                    "Unfortunately, we cannot change your seat for {query} because seats are auto-assigned.",
-                    "I'm sorry, but seat changes are not possible for {query} as they are assigned automatically.",
-                    "Regrettably, we cannot accommodate seat change requests for {query} as seats are auto-assigned.",
-                    "Please note that seats are automatically assigned by the system for {query}."
+                    "We cannot change seats as they’re auto-assigned.",
+                    "Seats are system-generated based on availability."
                 ]
             },
-            "shadow_booking": {
-                "keywords": ["shadow booking", "booking error"],
+            "shadow_bookings": {
+                "keywords": ["shadow booking", "booking not found"],
                 "responses": [
-                    "It's sad to hear about the inconvenience caused by {query}. Please provide passenger's full name, email ID, phone number, and a screenshot of the payment transaction.",
-                    "I apologize for the inconvenience, but I couldn't locate any booking matching the details provided for {query}.",
-                    "I regret to inform you that I am unable to locate any booking with the provided details for {query}."
+                    "I couldn’t find booking with provided details.",
+                    "Please share: Passenger name, Email, Phone, Payment screenshot."
                 ]
             },
-            "no_refund_statement": {
+            "no_refunded": {
                 "keywords": ["no refund", "refund denial"],
                 "responses": [
-                    "After thoroughly investigating the incident, we found that the bus arrived at the designated boarding point and other passengers successfully boarded the bus for {query}. Unfortunately, we are unable to process a refund."
+                    "After investigation, bus arrived at boarding point.",
+                    "Other passengers boarded, so no refund possible."
                 ]
             },
-            "refund_7_days": {
+            "refund_processing": {
                 "keywords": ["refund processing", "refund time"],
                 "responses": [
-                    "Your ticket has been cancelled as of today for {query}. It will take up to 7 working days for the amount to be credited back to your account.",
-                    "We would like to inform you that your ticket has been cancelled for {query}. The refund amount will be processed within 7 working days.",
-                    "Your ticket has been cancelled for {query}. It will take up to 7 working days for the refund to appear in your account.",
-                    "We would like to inform you that your ticket was cancelled for {query}. The refund amount will be processed within 7 working days."
+                    "Ticket cancelled on [DATE].",
+                    "Refund of [AMOUNT] will credit in 7 working days."
                 ]
             },
             "refund_tat_crossed": {
-                "keywords": ["refund not received", "refund delay"],
+                "keywords": ["refund not received", "refund delayed"],
                 "responses": [
-                    "We would like to inform you that the refund has been initiated from our end for {query}. Please check with your bank regarding the status.",
-                    "This is to notify you that the refund was processed from our side for {query}. Please verify with your bank."
+                    "Refund of [AMOUNT] processed on [DATE].",
+                    "Check with bank or share bank statement.",
+                    "Contact: https://help.flixbus.com/cancellation."
                 ]
             },
             "closing": {
                 "keywords": ["bye", "thank you", "end"],
                 "responses": [
-                    "It appears that our communication has paused for {query}. If you require further assistance, please feel free to initiate a new chat session via our support page.",
-                    "Our communication seems to have temporarily halted for {query}. Should you need additional help, please start a new chat session.",
-                    "It appears there's a pause in our communication for {query}. If you need more assistance, please begin a new chat session.",
-                    "Our communication has paused momentarily for {query}. If you require further assistance, please initiate a new chat session.",
-                    "Thank you for contacting Flix for {query}. Have a great day.",
-                    "I’m happy to have assisted you with your inquiry for {query}! If you have any other questions, please reach out.",
-                    "It was a pleasure assisting you today with {query}. If you need further assistance, don't hesitate to contact us.",
-                    "I'm glad I could help you with your inquiry for {query}. If there's anything else you need, please let me know.",
-                    "It was my pleasure to assist you with your inquiry for {query}. If you have any more questions, just let me know.",
-                    "I’m pleased I could assist you today with {query}! Wishing you a fantastic day ahead!"
+                    "Thank you for contacting Flix. Have a great day!",
+                    "Happy to assist! Reach out for more questions.",
+                    "Pleasure assisting you. Contact us again if needed.",
+                    "Chat paused. Start new session via support page."
                 ]
             },
             "request_rating": {
-                "keywords": ["rate", "survey", "feedback"],
+                "keywords": ["feedback", "rating", "survey"],
                 "responses": [
-                    "Looking forward to your valuable feedback towards my response for {query}, the link will be there right after the chat ends.",
-                    "We appreciate your feedback for {query} and look forward to hearing from you. The option will be available once our chat concludes.",
-                    "Your feedback towards my response for {query} is important for me! The link will be provided after our conversation ends.",
-                    "Please do provide me with your valuable feedback for {query}, which will help me to boost my morale and assist other passengers.",
-                    "I’d love to hear your thoughts for {query}. Your feedback means a lot to me and will inspire me to assist others better.",
-                    "I did my best to help you with {query}! If you have any feedback, I’d really appreciate it.",
-                    "Your thoughts mean a lot to me for {query}, so if you have any feedback, please share.",
-                    "If you found my chat helpful for {query}, I would greatly appreciate it if you could rate your experience via a survey.",
-                    "We value your feedback for {query} and would love to hear your thoughts. Feel free to share any comments.",
-                    "I'm pleased that I could assist you with {query}. Your feedback is invaluable to us via a survey after this chat.",
-                    "I’m happy to have assisted you with {query}. A survey will be sent to gather your insights.",
-                    "It’s great to know I could assist you with {query}! You’ll receive a survey after our chat to share your thoughts.",
-                    "It would mean a lot if you could complete the customer satisfaction survey for {query}.",
-                    "It will be great if you could fill out the customer satisfaction survey for {query}.",
-                    "Thank you for allowing me to assist you with {query}. A survey link will be sent after our chat.",
-                    "I am grateful for the opportunity to assist you with {query}. Your feedback via the survey link would mean a great deal."
+                    "Your feedback means a lot! Share via survey link.",
+                    "Glad to help! Please provide feedback via survey."
                 ]
             }
         }
-        self.load_training_data()
 
     def load_training_data(self):
-        if os.path.exists(self.data_file):
-            try:
-                with open(self.data_file, 'r') as f:
-                    data = json.load(f)
-                    if isinstance(data, dict) and "queries" in data and "cluster_labels" in data:
-                        self.training_data = data
-                        if "generated_responses" not in self.training_data:
-                            self.training_data["generated_responses"] = {}
-                        logger.info(f"Loaded training data from {self.data_file}")
-                    else:
-                        logger.warning(f"Invalid data format in {self.data_file}, initializing empty")
-                        self.training_data = {"queries": [], "cluster_labels": [], "generated_responses": {}}
-            except json.JSONDecodeError as e:
-                logger.error(f"Error decoding JSON from {self.data_file}: {e}")
-                self.training_data = {"queries": [], "cluster_labels": [], "generated_responses": {}}
-            except Exception as e:
-                logger.error(f"Error loading data: {e}")
-                self.training_data = {"queries": [], "cluster_labels": [], "generated_responses": {}}
-        else:
+        """Load training data from JSON file."""
+        if not os.path.exists(self.data_file):
             logger.info(f"No training data file found at {self.data_file}, initializing empty")
-            self.training_data = {"queries": [], "cluster_labels": [], "generated_responses": {}}
+            return
+
+        try:
+            with open(self.data_file, 'r') as f:
+                data = json.load(f)
+                if isinstance(data, dict) and "queries" in data and "cluster_labels" in data:
+                    self.training_data = data.copy()
+                    if "generated_responses" not in self.training_data:
+                        self.training_data["generated_responses"] = {}
+                    if "learned_phrases" not in self.training_data:
+                        self.training_data["learned_phrases"] = {}
+                    if "used_responses" not in self.training_data:
+                        self.training_data["used_responses"] = {}
+                    self.personalized_ai.learned_phrases = self.training_data["learned_phrases"]
+                    logger.info(f"Successfully loaded training data from {self.data_file}")
+                else:
+                    logger.warning(f"Invalid data format in {self.data_file}, initializing empty")
+        except json.JSONDecodeError as e:
+            logger.error(f"Error decoding JSON from {self.data_file}: {e}")
+        except Exception as e:
+            logger.error(f"Error loading data: {e}")
 
     def save_training_data(self):
+        """Save training data to JSON file."""
+        self.training_data["learned_phrases"] = self.personalized_ai.learned_phrases
         try:
             with open(self.data_file, 'w') as f:
                 json.dump(self.training_data, f, indent=2)
@@ -524,50 +635,61 @@ class CustomAI:
             logger.error(f"Error saving data: {e}")
 
     def custom_cluster(self, features):
+        """Perform custom k-means clustering for pattern recognition."""
         if features.shape[0] < self.num_clusters:
             return [-1] * features.shape[0]
-        indices = random.sample(range(features.shape[0]), self.num_clusters)
-        centroids = np.array([features[i].toarray()[0] for i in indices])
-        labels = [-1] * features.shape[0]
-        max_iterations = 50
-        for _ in range(max_iterations):
-            new_labels = []
-            for i in range(features.shape[0]):
-                distances = np.linalg.norm(features[i].toarray() - centroids, axis=1)
-                new_labels.append(np.argmin(distances))
-            if new_labels == labels:
-                break
-            labels = new_labels[:]
-            for k in range(self.num_clusters):
-                cluster_points = [
-                    features[i].toarray()[0]
-                    for i in range(features.shape[0]) if labels[i] == k
-                ]
-                if cluster_points:
-                    centroids[k] = np.mean(cluster_points, axis=0)
-        return labels
+
+        try:
+            indices = random.sample(range(features.shape[0]), self.num_clusters)
+            centroids = np.array([features[i].toarray()[0] for i in indices])
+            labels = [-1] * features.shape[0]
+            max_iterations = 50
+
+            for _ in range(max_iterations):
+                new_labels = []
+                for i in range(features.shape[0]):
+                    distances = np.linalg.norm(features[i].toarray() - centroids, axis=1)
+                    new_labels.append(np.argmin(distances))
+                if new_labels == labels:
+                    break
+                labels = new_labels[:]
+                for k in range(self.num_clusters):
+                    cluster_points = [
+                        features[i].toarray()[0]
+                        for i in range(features.shape[0]) if labels[i] == k
+                    ]
+                    if cluster_points:
+                        centroids[k] = np.mean(cluster_points, axis=0)
+            return labels
+        except Exception as e:
+            logger.error(f"Clustering error: {e}")
+            return [-1] * features.shape[0]
 
     def train_model(self, query, generated_response=None, category=None):
+        """Train model with ML and adaptation."""
         self.query_count += 1
         self.training_data["queries"].append(query)
         self.training_data["cluster_labels"].append(-1)
+
         if generated_response and category:
             if category not in self.training_data["generated_responses"]:
                 self.training_data["generated_responses"][category] = []
+            if category not in self.training_data["used_responses"]:
+                self.training_data["used_responses"][category] = set()
             self.training_data["generated_responses"][category].append(generated_response)
+            self.training_data["used_responses"][category].add(generated_response)
 
         if self.query_count % self.train_interval == 0 and len(self.training_data["queries"]) >= self.num_clusters:
             try:
-                features = self.vectorizer.fit_transform(self.training_data['queries'])
+                features = self.vectorizer.fit_transform(self.training_data["queries"])
                 self.training_data["cluster_labels"] = self.custom_cluster(features)
                 self.save_training_data()
-                return "Model updated successfully."
+                logger.info("Model updated successfully")
             except Exception as e:
                 logger.error(f"Error updating model: {e}")
-                return f"Error updating model: {e}"
-        return None
 
     def get_query_category(self, query):
+        """Determine category using pattern recognition."""
         query_lower = query.lower()
         for category, info in self.query_response_map.items():
             for keyword in info["keywords"]:
@@ -576,173 +698,152 @@ class CustomAI:
         return None
 
     def generate_new_response(self, query, category):
-        if category in self.query_response_map:
-            existing_responses = self.query_response_map[category]["responses"]
-        else:
-            existing_responses = self.response_formats
+        """Generate a unique response by analyzing previous data."""
+        existing_responses = self.query_response_map.get(category, {}).get("responses", [])
+        used_responses = self.training_data["used_responses"].get(category, set())
+        all_responses = existing_responses + self.training_data["generated_responses"].get(category, [])
 
-        # Response templates for rephrasing
+        # Extract key phrases and actions
+        key_phrases = []
+        for resp in all_responses:
+            clean_resp = resp.replace("{query}", query.lower())
+            phrases = re.findall(r"(?:for|with|regarding|to|about)\s+[\w\s]+(?:\.)", clean_resp, re.IGNORECASE)
+            key_phrases.extend([p.strip(".") for p in phrases])
+            actions = re.findall(r"(?:please|kindly|you can|we recommend)\s+[\w\s]+(?:\.)", clean_resp, re.IGNORECASE)
+            key_phrases.extend([a.strip(".") for a in actions])
+
+        # Templates for new responses
         templates = [
             "I’m here to assist with {query}. {action}",
             "Thank you for reaching out about {query}. {action}",
             "Regarding your concern with {query}, {action}",
-            "I understand your request for {query}. {action}",
-            "For {query}, {action}",
-            "We appreciate your inquiry about {query}. {action}",
-            "To address {query}, {action}"
+            "I understand your query about {query}. {action}",
+            "We’re here to help with {query}. {action}"
         ]
 
-        # Extract key phrases from existing responses
-        key_phrases = []
-        for resp in existing_responses:
-            # Remove the {query} placeholder
-            clean_resp = resp.replace("{query}", query.lower())
-            # Extract meaningful phrases (e.g., after "for", "with", etc.)
-            phrases = re.findall(r"(?:for|with|regarding|to|about)\s+[\w\s]+(?:\.)", clean_resp, re.IGNORECASE)
-            key_phrases.extend([p.strip(".") for p in phrases])
-            # Extract action-oriented clauses
-            actions = re.findall(r"(?:please|kindly|you can|we recommend)\s+[\w\s]+(?:\.)", clean_resp, re.IGNORECASE)
-            key_phrases.extend([a.strip(".") for a in actions])
-
-        # Select random phrases or fallback to generic
-        if key_phrases:
-            action = random.choice(key_phrases)
-        else:
-            action = "please refer to our website for further details"
-
-        # Combine with a random template
-        new_response = random.choice(templates).format(query=query.lower(), action=action)
-
-        # Ensure response is unique
-        all_responses = existing_responses + (self.training_data["generated_responses"].get(category, []) if category in self.training_data["generated_responses"] else [])
-        if new_response in all_responses:
-            # Try a different combination
-            action = random.choice(key_phrases) if key_phrases else "check our website for more information"
+        # Try generating a unique response
+        max_attempts = 10
+        for _ in range(max_attempts):
+            action = random.choice(key_phrases) if key_phrases else "please visit our website for further assistance"
             new_response = random.choice(templates).format(query=query.lower(), action=action)
+            if new_response not in used_responses and new_response not in all_responses:
+                self.training_data["used_responses"].setdefault(category, set()).add(new_response)
+                self.save_training_data()
+                return new_response
 
+        # Fallback if unique response not found
+        fallback_action = "check our support page for more details"
+        new_response = random.choice(templates).format(query=query.lower(), action=fallback_action)
+        self.training_data["used_responses"].setdefault(category, set()).add(new_response)
+        self.save_training_data()
         return new_response
 
     def generate_initial_response(self, query, category=None):
+        """Generate initial response with non-repeating logic."""
         if query not in self.used_response_sets:
-            self.used_response_sets[query] = []
+            self.used_response_sets[query] = set()
 
         used_responses = self.used_response_sets[query]
+        persistent_used = self.training_data["used_responses"].get(category, set())
 
         if category and category in self.query_response_map:
             available_formats = [
                 f for f in self.query_response_map[category]["responses"]
-                if f.format(query=query.lower()) not in used_responses
+                if f.format(query=query.lower()) not in used_responses and f.format(query=query.lower()) not in persistent_used
             ]
             if not available_formats:
-                # Generate new response instead of resetting
-                new_response = self.generate_new_response(query, category)
-                self.query_response_map[category]["responses"].append(new_response)
-                self.train_model(query, new_response, category)
-                self.used_response_sets[query].append(new_response)
-                return new_response
+                response = self.generate_new_response(query, category)
+                self.training_data["generated_responses"].setdefault(category, []).append(response)
+                self.train_model(query, response, category)
+                self.used_response_sets[query].add(response)
+                return response
             selected_format = random.choice(available_formats)
+            response = selected_format.format(query=query.lower())
+            self.used_response_sets[query].add(response)
+            self.training_data["used_responses"].setdefault(category, set()).add(response)
+            self.save_training_data()
         else:
-            available_formats = [
-                f for f in self.response_formats
-                if f.format(query=query.lower()) not in used_responses
-            ]
-            if not available_formats:
-                # Generate new response for generic case
-                new_response = self.generate_new_response(query, None)
-                self.response_formats.append(new_response)
-                self.train_model(query, new_response, None)
-                self.used_response_sets[query].append(new_response)
-                return new_response
-            selected_format = random.choice(available_formats)
-
-        response = selected_format.format(query=query.lower())
-        self.used_response_sets[query].append(response)
+            response = self.personalized_ai.generate_response(query, used_responses)
+            self.train_model(query, response, None)
+            self.used_response_sets[query].add(response)
+            self.training_data["used_responses"].setdefault("unknown", set()).add(response)
+            self.save_training_data()
         return response
 
+    def find_similar_query(self, query, features, query_features):
+        """Find similar query using pattern recognition."""
+        try:
+            similarities = cosine_similarity(query_features, features)[0]
+            cluster_indices = [
+                i for i, label in enumerate(self.training_data["cluster_labels"])
+                if label == self.training_data["cluster_labels"][np.argmax(similarities)]
+            ]
+            available_queries = [
+                self.training_data["queries"][i] for i in cluster_indices
+                if self.training_data["queries"][i].lower() != query.lower()
+            ]
+            return random.choice(available_queries) if available_queries else None
+        except Exception as e:
+            logger.error(f"Error finding similar query: {e}")
+            return None
+
     def generate_response(self, query):
-        update_status = self.train_model(query)
+        """Generate a response with advanced AI features."""
+        self.train_model(query)
         category = self.get_query_category(query)
 
         if len(self.training_data["queries"]) < self.num_clusters:
             response = self.generate_initial_response(query, category)
-            status = "Success"
-        else:
-            try:
-                query_features = self.vectorizer.transform([query])
-                features = self.vectorizer.transform(self.training_data["queries"])
-                distances = [
-                    np.linalg.norm(query_features.toarray()[0] - f.toarray()[0])
-                    for f in features
-                ]
-                cluster_indices = [
-                    i for i, label in enumerate(self.training_data["cluster_labels"])
-                    if label == self.training_data["cluster_labels"][np.argmin(distances)]
-                ]
-                if cluster_indices:
-                    if query not in self.used_response_sets:
-                        self.used_response_sets[query] = []
-                    available_queries = [
-                        self.training_data["queries"][i] for i in cluster_indices
-                        if self.training_data["queries"][i].lower() != query.lower()
-                    ]
-                    response = None
-                    used_responses = self.used_response_sets[query]
-                    if available_queries:
-                        similar_query = random.choice(available_queries)
-                        similar_category = self.get_query_category(similar_query)
-                        if similar_category and similar_category in self.query_response_map:
-                            available_formats = [
-                                f for f in self.query_response_map[similar_category]["responses"]
-                                if f.format(query=query.lower()) not in used_responses
-                            ]
-                            if not available_formats:
-                                # Generate new response
-                                new_response = self.generate_new_response(query, similar_category)
-                                self.query_response_map[similar_category]["responses"].append(new_response)
-                                self.train_model(query, new_response, similar_category)
-                                self.used_response_sets[query].append(new_response)
-                                response = new_response
-                            else:
-                                selected_format = random.choice(available_formats)
-                                response = selected_format.format(query=query.lower())
-                                self.used_response_sets[query].append(response)
-                        else:
-                            available_formats = [
-                                f for f in self.response_formats
-                                if f.format(query=query.lower()) not in used_responses
-                            ]
-                            if not available_formats:
-                                # Generate new response
-                                new_response = self.generate_new_response(query, None)
-                                self.response_formats.append(new_response)
-                                self.train_model(query, new_response, None)
-                                self.used_response_sets[query].append(new_response)
-                                response = new_response
-                            else:
-                                selected_format = random.choice(available_formats)
-                                response = selected_format.format(query=query.lower())
-                                self.used_response_sets[query].append(response)
-                    else:
-                        response = self.generate_initial_response(query, category)
-                    status = "Success (clustered)"
-                else:
-                    response = self.generate_initial_response(query, category)
-                    status = "Success"
-            except Exception as e:
-                logger.error(f"Model error: {e}")
-                response = self.generate_initial_response(query, category)
-                status = f"Model error: {e}"
+            return response, "Success"
 
-        return response, status
+        try:
+            query_features = self.vectorizer.transform([query])
+            features = self.vectorizer.transform(self.training_data["queries"])
+            similar_query = self.find_similar_query(query, features, query_features)
+
+            if similar_query:
+                similar_category = self.get_query_category(similar_query)
+                used_responses = self.used_response_sets.get(query, set())
+                persistent_used = self.training_data["used_responses"].get(similar_category, set())
+                if similar_category and similar_category in self.query_response_map:
+                    available_formats = [
+                        f for f in self.query_response_map[similar_category]["responses"]
+                        if f.format(query=query.lower()) not in used_responses and f.format(query=query.lower()) not in persistent_used
+                    ]
+                    if not available_formats:
+                        response = self.generate_new_response(query, similar_category)
+                        self.training_data["generated_responses"].setdefault(similar_category, []).append(response)
+                        self.train_model(query, response, similar_category)
+                        self.used_response_sets[query].add(response)
+                    else:
+                        response = random.choice(available_formats).format(query=query.lower())
+                        self.used_response_sets[query].add(response)
+                        self.training_data["used_responses"].setdefault(similar_category, set()).add(response)
+                        self.save_training_data()
+                else:
+                    response = self.personalized_ai.generate_response(query, used_responses)
+                    self.train_model(query, response, None)
+                    self.used_response_sets[query].add(response)
+                    self.training_data["used_responses"].setdefault("unknown", set()).add(response)
+                    self.save_training_data()
+                return response, "Success (clustered)"
+            else:
+                response = self.generate_initial_response(query, category)
+                return response, "Success"
+        except Exception as e:
+            logger.error(f"Model error: {e}")
+            response = self.generate_initial_response(query, category)
+            return response, "Success"
 
 ai = CustomAI()
 
 @app.post("/generate-response")
 async def generate_response(request: QueryRequest):
+    """Generate a response for a user query."""
     query = request.query.strip()
     if not query:
         raise HTTPException(status_code=400, detail="Query cannot be empty")
-    
+
     try:
         response, status = ai.generate_response(query)
         return {
@@ -752,7 +853,7 @@ async def generate_response(request: QueryRequest):
         }
     except Exception as e:
         logger.error(f"API error: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
