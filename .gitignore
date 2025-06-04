@@ -2,4 +2,3 @@ venv/
 training_data.json
 __pycache__/
 *.pyc
-static/
