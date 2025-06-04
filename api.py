@@ -10,8 +10,10 @@ import json
 import os
 import logging
 import re
+import os.path
 import difflib
 from nltk.tokenize import word_tokenize
+from nltk
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import stopwords
 import nltk
@@ -27,36 +29,39 @@ except LookupError:
     nltk.download('wordnet')
     nltk.download('stopwords')
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__')
+
+app)
 
 app = FastAPI(title="AI-Driven Query Response API")
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/staticfiles", StaticFiles(directory="static"directory="static"), name="static"))
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
 @app.get("/")
 async def root():
     """Root endpoint for API welcome message."""
-    return {"message": "Welcome to the AI-Driven Query Response API. Visit /docs for API documentation."}
+    return {"message": "Welcome to the AI-Driven Query Response API. Visit /docs for API documentation."})
 
 class QueryRequest(BaseModel):
     """Pydantic model for query request payload."""
     query: str
 
 class PersonalizedAI:
-    """Personalized AI with ML, NLP, pattern recognition, and self-training."""
+    """Personalized AI with ML, NLP, and pattern recognition."""
     
     def __init__(self):
         self.intent_map = {
             "booking": ["book", "ticket", "reserve", "purchase"],
-            "cancellation": ["cancel", "refund", "cancellation"],
+            "cancellation": ["cancel", "cancellation", "refund"],
             "bus_status": ["bus", "late", "delay", "location", "where"],
             "payment": ["pay", "payment", "charge", "price"],
             "complaint": ["complain", "issue", "problem", "bad"],
@@ -177,12 +182,12 @@ class CustomAI:
             "cluster_labels": [],
             "generated_responses": {},
             "learned_phrases": {},
-            "used_responses": {}  # Track all used responses per category
+            "used_responses": {}
         }
-        self.data_file = os.getenv("DATA_FILE", "training_data.json")
+        self.data_file = os.getenv("DATA_FILE", "/tmp/training_data.json")  # Fallback to /tmp
         self.query_count = 0
         self.train_interval = 5
-        self.used_response_sets = {}  # In-memory tracking for current session
+        self.used_response_sets = {}
         self.num_clusters = 10
         self.personalized_ai = PersonalizedAI()
         self.query_response_map = self.load_response_map()
@@ -334,7 +339,7 @@ class CustomAI:
                 "responses": [
                     "Extremely sorry to inform to you that for the ride that will be departing as per its departure time scheduled.",
                     "So, requesting you to please to try",
-                    "Kindly try to reach the to boarding point prior to the time provided. If you are not going to reach reach in time you can cancel your ride up to prior to departure via prior to departure via",
+                    "Kindly try to reach the to boarding point prior to "If you’re not going to reach reach in time you can cancel your ride up to prior to departure via prior to departure via",
                     "This is manage my booking: https://shop.flixbus.in/rebooking/ login.",
                     "This is the bus host contact number."
                 ]
@@ -342,7 +347,7 @@ class CustomAI:
             "ride_cancellations": {
                 "keywords": ["ride cancellation", "canceled ride"],
                 "responses": [
-                    "I’m really sorry for this inconvenience due to  ride cancellation cancellation.",
+                    "I’m really sorry for this inconvenience due to "Due to ride cancellation cancellation.",
                     "A self-help link has been provided provided to you via email with with booking email id.",
                     "Please check email email or spam folder folder to book an alternative or generate refund a ticket refund within 7 days working days.",
                     "Should I proceed with your refund permission?"
@@ -376,7 +381,7 @@ class CustomAI:
                     "Luggage: 7kg hand, 20kg regular free luggage.",
                     "Payment: Credit card, UPI, Net banking.",
                     "Platform fee: Rs 5."
-                ],
+                ]
             },
             "manage_my_bookings": {
                 "keywords": ["change date", "cancel ticket"],
@@ -486,7 +491,7 @@ class CustomAI:
                     "Cancel ticket up to 15 min minutes prior departure via prior Manage Booking.",
                     "Go to: https://shop.flixbus.in/rebooking/login.",
                     "Select 'Cancel trip'.",
-                    "Choose cash refund (7 days working days) or voucher.",
+                    "Choose cash or voucher refund (7 days).",
                     "See policy: [Link]."
                 ]
             },
@@ -515,7 +520,7 @@ class CustomAI:
                 ]
             },
             "price_discounts": {
-                "keywords": ["prices", "discounts"],
+                "keywords": ["price", "discounts"],
                 "responses": [
                     "Ticket price is final, no discounts available now.",
                     "Prices are dynamic based on demand.",
@@ -559,7 +564,7 @@ class CustomAI:
                 ]
             },
             "no_refunded": {
-                "keywords": ["no refund", "refund denial"],
+                "keywords": ["no refund", "pax no show"],
                 "responses": [
                     "After investigation, bus arrived at boarding point.",
                     "Other passengers boarded, so no refund possible."
@@ -600,11 +605,20 @@ class CustomAI:
 
     def load_training_data(self):
         """Load training data from JSON file."""
-        if not os.path.exists(self.data_file):
-            logger.info(f"No training data file found at {self.data_file}, initializing empty")
-            return
-
+        dir_path = os.path.dirname(self.data_file)
         try:
+            # Ensure directory exists
+            if dir_path and not os.path.exists(dir_path):
+                os.makedirs(dir_path, exist_ok=True)
+                logger.info(f"Created directory for training data: {dir_path}")
+
+            if not os.path.exists(self.data_file):
+                logger.info(f"No training data file found at {self.data_file}, initializing empty")
+                # Create empty file
+                with open(self.data_file, 'w') as f:
+                    json.dump(self.training_data, f, indent=2)
+                return
+
             with open(self.data_file, 'r') as f:
                 data = json.load(f)
                 if isinstance(data, dict) and "queries" in data and "cluster_labels" in data:
@@ -621,18 +635,28 @@ class CustomAI:
                     logger.warning(f"Invalid data format in {self.data_file}, initializing empty")
         except json.JSONDecodeError as e:
             logger.error(f"Error decoding JSON from {self.data_file}: {e}")
+        except PermissionError as e:
+            logger.error(f"Permission error accessing {self.data_file}: {e}")
         except Exception as e:
-            logger.error(f"Error loading data: {e}")
+            logger.error(f"Error loading data from {self.data_file}: {e}")
 
     def save_training_data(self):
         """Save training data to JSON file."""
         self.training_data["learned_phrases"] = self.personalized_ai.learned_phrases
+        dir_path = os.path.dirname(self.data_file)
         try:
-            with open(self.data_file, 'w') as f:
+            # Ensure directory exists
+            if dir_path and not os.path.exists(dir_path):
+                os.makedirs(dir_path, exist_ok=True)
+                logger.info(f"Created directory for training data: {dir_path}")
+
+            with open(self.data_file, mode='w', encoding='utf-8') as f:
                 json.dump(self.training_data, f, indent=2)
-            logger.info(f"Saved training data to {self.data_file}")
+            logger.info(f"Successfully saved training data to {self.data_file}")
+        except PermissionError as e:
+            logger.error(f"Permission error saving to {self.data_file}: {e}")
         except Exception as e:
-            logger.error(f"Error saving data: {e}")
+            logger.error(f"Error saving data to {self.data_file}: {e}")
 
     def custom_cluster(self, features):
         """Perform custom k-means clustering for pattern recognition."""
@@ -741,7 +765,7 @@ class CustomAI:
     def generate_initial_response(self, query, category=None):
         """Generate initial response with non-repeating logic."""
         if query not in self.used_response_sets:
-            self.used_response_sets[query] = set()
+            self.used_response_sets[query"] = set()
 
         used_responses = self.used_response_sets[query]
         persistent_used = self.training_data["used_responses"].get(category, set())
@@ -756,6 +780,7 @@ class CustomAI:
                 self.training_data["generated_responses"].setdefault(category, []).append(response)
                 self.train_model(query, response, category)
                 self.used_response_sets[query].add(response)
+                self.save_training_data()
                 return response
             selected_format = random.choice(available_formats)
             response = selected_format.format(query=query.lower())
@@ -831,7 +856,7 @@ class CustomAI:
                 response = self.generate_initial_response(query, category)
                 return response, "Success"
         except Exception as e:
-            logger.error(f"Model error: {e}")
+            logger.error(f"Model error: {str(e)}")
             response = self.generate_initial_response(query, category)
             return response, "Success"
 
