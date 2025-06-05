@@ -4,7 +4,7 @@ uvicorn==0.31.1
 numpy==2.0.0
 nltk==3.9.1
 scikit-learn==1.5.2
-scipy==1.14.1  # Downgraded to ensure Python 3.9 compatibility
+scipy==1.13.1  # Downgraded for Python 3.9 compatibility
 pydantic==2.9.2
 anyio==4.6.2.post1
 click==8.1.7
